@@ -32,7 +32,6 @@ func (h *AuthHandler) LoginHandler(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"ERROR": err.Error()})
 	}
 
-	// Generate Secure Cookie
 	cookie, err := utils.SetSecureCookies(c)
 	if err != nil {
 		log.Error("Failed to create session cookie for user:", loginResponse.Message)

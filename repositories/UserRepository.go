@@ -6,58 +6,75 @@ import (
 	"echo-api/utils"
 	"errors"
 	"fmt"
-	"math/rand"
-	"time"
 
+	"github.com/labstack/gommon/log"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var localLog = logrus.New()
-
-type UserRepository interface {
-	FindByUsernameAndPassword(dbName, username, encodedPassword string) (*models.User, error)
-	RegisterUser(dbName string, user *models.RegisterRequest) (bool, error)
-	VerifyUser(dbName, email, securityCode string) (bool, error)
-}
 
 type userRepository struct {
 	log *logrus.Logger
 }
 
-func NewUserRepository(log *logrus.Logger) UserRepository {
+func NewUserRepository(log *logrus.Logger) models.UserRepository {
 	return &userRepository{log}
 }
 
-func (r *userRepository) RegisterUser(dbName string, user *models.RegisterRequest) (bool, error) {
+func (r *userRepository) RegisterUser(dbName string, user *models.RegisterRequest) error {
 	db, err := configs.RunDatabase(dbName)
 	if err != nil {
 		localLog.Error("Database connection failed:", err)
-		return false, err
+		return err
 	}
 
-	rand.New(rand.NewSource(time.Now().UnixNano()))
-	securityCode := fmt.Sprintf("%06d", rand.Intn(1000000))
+	// securityCode, err := utils.GenerateSecurityCode()
+	// if err != nil {
+	// 	log.Error("Failed to generate security code:", err)
+	// 	return false, err
+	// }
 
-	user.SecurityCode = securityCode
-	user.LogIn = 0
+	// user.SecurityCode = securityCode
+	// user.LogIn = 0
+	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback() // Rollback jika panic
+		}
+	}()
 
-	err = db.Table("myuser").Create(&user).Error
+	var existingUser models.User
+	err = tx.Raw("SELECT * FROM myuser WHERE Email = ? AND FOR UPDATE", user.Email).
+		Scan(&existingUser).Error
+	if err == nil {
+		tx.Rollback()
+		return errors.New("Email already registered")
+	}
+
+	err = tx.Table("myuser").Create(&user).Error
 	if err != nil {
-		return false, err
+		tx.Rollback()
+		return err
 	}
 
-	if user.Email == "" {
-		return false, errors.New("Email cannot be null")
+	// if user.Email == "" {
+	// 	return false, errors.New("Email cannot be null")
+	// }
+
+	// err = utils.SendVerificationEmail(user.Email, securityCode)
+	// if err != nil {
+	// 	message := fmt.Sprintf("Failed to send verification email to %s", user.UserCode)
+	// 	r.log.Error(message, err)
+	// 	return false, errors.New("Failed to send verification email")
+	// }
+	if err := tx.Commit().Error; err != nil {
+		localLog.Error("Transaction commit failed:", err)
+		return err
 	}
 
-	err = utils.SendVerificationEmail(user.Email, securityCode)
-	if err != nil {
-		message := fmt.Sprintf("Failed to send verification email to %s", user.UserCode)
-		r.log.Error(message, err)
-		return false, errors.New("Failed to send verification email")
-	}
-
-	return true, nil
+	return nil
 }
 
 func (r *userRepository) VerifyUser(dbName, email, securityCode string) (bool, error) {
@@ -67,17 +84,37 @@ func (r *userRepository) VerifyUser(dbName, email, securityCode string) (bool, e
 		return false, err
 	}
 
-	// Update langsung tanpa perlu memanggil First(&user)
-	result := db.Table("myuser").
-		Where("Email = ? AND SecurityCode = ?", email, securityCode).
-		Updates(map[string]interface{}{"LogIn": 1})
+	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
 
-	if result.RowsAffected == 0 {
+	var user models.User
+	err = tx.Raw("SELECT * FROM myuser WHERE Email = ? AND SecurityCode = ? FOR UPDATE", email, securityCode).
+		Scan(&user).Error
+	if err != nil {
+		tx.Rollback()
+		localLog.Error("User not found or already verified:", err)
 		return false, errors.New("Invalid verification code or user already verified")
 	}
 
-	if result.Error != nil {
+	if user.LogIn == 1 {
+		tx.Rollback()
+		return false, errors.New("User already verified")
+	}
+
+	result := tx.Model(&user).Update("LogIn", 1)
+	if result.RowsAffected == 0 || result.Error != nil {
+		tx.Rollback()
+		localLog.Error("Failed to update LogIn:", result.Error)
 		return false, errors.New("Failed to verify user")
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		localLog.Error("Transaction commit failed:", err)
+		return false, err
 	}
 
 	return true, nil
@@ -92,13 +129,89 @@ func (r *userRepository) FindByUsernameAndPassword(dbName, username, encodedPass
 
 	var user models.User
 	err = db.Table("myuser").
-		Select("UserCode, Login").
-		Where("UserName = ? AND Password LIKE ?", username, encodedPassword[:len(encodedPassword)-2]+"%").
-		First(&user).Error
+		Clauses(clause.Locking{Strength: "UPDATE"}).
+		// Select("UserCode, Login").
+		Raw("SELECT UserCode, LogIn FROM myuser WHERE UserName = ? AND Password LIKE ?", username, encodedPassword[:len(encodedPassword)-2]+"%").
+		// Where("UserName = ? AND Password LIKE ?", username, encodedPassword[:len(encodedPassword)-2]+"%").
+		Scan(&user).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	if user.LogIn == 0 {
+		return nil, errors.New(fmt.Sprintf("Account %s not verified, please verify your account first", user.UserCode))
+	}
+
+	return &user, nil
+}
+
+func FindByUsernameAndPassword(dbName, username, encodedPassword string) (*models.User, error) {
+	db, err := configs.RunDatabase(dbName)
+	if err != nil {
+		localLog.Error("Database connection failed:", err)
+		return nil, err
+	}
+
+	db = db.Session(&gorm.Session{SkipDefaultTransaction: true})
+
+	var user models.User
+	err = db.Table("myuser").
+		Clauses(clause.Locking{Strength: "UPDATE"}).
+		// Select("UserCode, Login").
+		Raw("SELECT UserCode FROM myuser WHERE UserName = ? AND Password LIKE ? AND LogIn = 1", username, encodedPassword[:len(encodedPassword)-2]+"%").
+		// Where("UserName = ? AND Password LIKE ?", username, encodedPassword[:len(encodedPassword)-2]+"%").
+		Scan(&user).Error
 
 	if err != nil {
 		return nil, err
 	}
 
 	return &user, nil
+}
+
+func (r *userRepository) ResendVerifyCode(dbName, email, securityCode string) error {
+	db, err := configs.RunDatabase(dbName)
+	if err != nil {
+		localLog.Error("Database connection failed:", err)
+		return err
+	}
+
+	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback() // Rollback jika panic
+		}
+	}()
+
+	var user models.User
+	err = tx.Raw("SELECT * FROM myuser WHERE Email = ? FOR UPDATE", email).
+		Scan(&user).Error
+	if err != nil {
+		tx.Rollback()
+		return errors.New("User not found")
+	}
+
+	securityCode, err = utils.GenerateSecurityCode()
+	if err != nil {
+		tx.Rollback()
+		log.Error("Failed to generate security code:", err)
+		return err
+	}
+
+	if err := tx.Model(&user).Update("SecurityCode", securityCode).Error; err != nil {
+		tx.Rollback()
+		return errors.New("Failed to update verification code")
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		localLog.Error("Transaction commit failed:", err)
+		return err
+	}
+
+	// if err := utils.SendVerificationEmail(email, securityCode); err != nil {
+	// 	return false, errors.New("Failed to send verification email")
+	// }
+
+	return nil
 }

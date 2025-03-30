@@ -1,8 +1,6 @@
 package configs
 
 import (
-	// "fmt"
-
 	"echo-api/models"
 	"fmt"
 	"os"

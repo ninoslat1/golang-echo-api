@@ -27,7 +27,7 @@ type RegisterRequest struct {
 	Password     string `json:"password" binding:"required"  gorm:"column:Password" form:"password"`
 	Email        string `json:"email" binding:"required,email"  gorm:"column:Email" form:"email"`
 	UserCode     string `json:"usercode" binding:"required"  gorm:"column:UserCode" form:"usercode"`
-	LogIn        int64  `json:"login" form:"login"  gorm:"column:LogIn" default:"0"`
+	LogIn        int64  `json:"login" form:"login"  gorm:"column:LogIn"`
 	SecurityCode string `json:"securitycode" form:"securitycode"  gorm:"column:SecurityCode" binding:"required"`
 }
 

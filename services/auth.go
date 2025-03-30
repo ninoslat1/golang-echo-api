@@ -2,75 +2,88 @@ package services
 
 import (
 	models "echo-api/models"
-	repo "echo-api/repositories"
 	"echo-api/utils"
-	"errors"
 	"fmt"
 )
 
 type authService struct {
-	userRepo repo.UserRepository
+	userRepo models.UserRepository
 }
 
-func NewAuthService(userRepo repo.UserRepository) models.AuthService {
+func NewAuthService(userRepo models.UserRepository) models.AuthService {
 	return &authService{userRepo}
 }
 
-func (s *authService) Login(dbName string, loginReq *models.LoginRequest) (*models.LoginResponse, error) {
-	if loginReq.UserName == "" || loginReq.Password == "" {
-		return nil, errors.New("Username and password required")
-	}
-
-	encodePassword := utils.EncodeToBase64Password(loginReq.Password)
-
-	user, err := s.userRepo.FindByUsernameAndPassword(dbName, loginReq.UserName, encodePassword)
-	if err != nil {
-		return nil, errors.New("Invalid credentials")
-	}
-
-	if user.LogIn == 0 {
-		return &models.LoginResponse{
-			Message: fmt.Sprintf("Account %s not verified, please verify your account first", user.UserCode),
-		}, nil
-	}
-
-	return &models.LoginResponse{
-		Message: "Welcome " + user.UserCode,
-	}, nil
-}
-
 func (s *authService) Register(dbName string, registerReq *models.RegisterRequest) (*models.RegisterResponse, error) {
-	if registerReq.UserName == "" || registerReq.Password == "" || registerReq.UserCode == "" {
-		return nil, errors.New("Username and password required")
+	// Validasi data masuk
+	if err := utils.RegisterRequestValidator(registerReq); err != nil {
+		return nil, err
 	}
 
-	encodePassword := utils.EncodeToBase64Password(registerReq.Password)
+	// Encode password sebelum disimpan
+	registerReq.Password = utils.EncodeToBase64Password(registerReq.Password)
 
-	registerReq.Password = encodePassword
-	success, err := s.userRepo.RegisterUser(dbName, registerReq)
-	if err != nil || !success {
-		return nil, errors.New(err.Error())
+	// Generate kode keamanan
+	securityCode, err := utils.GenerateSecurityCode()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to generate security code: %w", err)
 	}
 
-	response := &models.RegisterResponse{
-		Message: "User registered successfully. Please verify your email.",
+	registerReq.SecurityCode = securityCode
+	registerReq.LogIn = 0
+
+	err = s.userRepo.RegisterUser(dbName, registerReq)
+	if err != nil {
+		return nil, err
 	}
-	return response, nil
+
+	if err := utils.SendVerificationEmail(registerReq.Email, securityCode); err != nil {
+		return nil, fmt.Errorf("Failed to send verification email: %w", err)
+	}
+
+	return &models.RegisterResponse{Message: "User registered successfully. Please verify your email."}, nil
 }
 
 func (s *authService) VerifyUser(dbName, email, securityCode string) (bool, error) {
-	if email == "" || securityCode == "" {
-		return false, errors.New("Email and security code are required")
-	}
-
-	verified, err := s.userRepo.VerifyUser(dbName, email, securityCode)
-	if err != nil {
+	if err := utils.VerifyUserValidator(email, securityCode); err != nil {
 		return false, err
 	}
 
-	if !verified {
-		return false, errors.New("Invalid verification code or user already verified")
+	return s.userRepo.VerifyUser(dbName, email, securityCode)
+}
+
+func (s *authService) Login(dbName string, loginReq *models.LoginRequest) (*models.LoginResponse, error) {
+	if err := utils.LoginRequestValidator(loginReq); err != nil {
+		return nil, err
 	}
 
-	return true, nil
+	encodedPassword := utils.EncodeToBase64Password(loginReq.Password)
+
+	user, err := s.userRepo.FindByUsernameAndPassword(dbName, loginReq.UserName, encodedPassword)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.LoginResponse{Message: "Welcome " + user.UserCode}, nil
+}
+
+func (s *authService) ResendVerifyCode(dbName, email string) error {
+	securityCode, err := utils.GenerateSecurityCode()
+	if err != nil {
+		return fmt.Errorf("Failed to generate security code: %w", err)
+	}
+
+	// Perbarui kode verifikasi di database
+	err = s.userRepo.ResendVerifyCode(dbName, email, securityCode)
+	if err != nil {
+		return err
+	}
+
+	// Kirim ulang email verifikasi
+	err = utils.SendVerificationEmail(email, securityCode)
+	if err != nil {
+		return fmt.Errorf("Failed to send verification email: %w", err)
+	}
+
+	return nil
 }

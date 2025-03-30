@@ -10,10 +10,10 @@ type User struct {
 	Email        *string `gorm:"column:Email;size:100"`
 	Password     string  `gorm:"column:Password;not null;size:255"`
 	SecurityCode string  `gorm:"column:SecurityCode;not null;size:255"`
-	GroupID      uint    `gorm:"column:GroupID;not null;default:0"`
-	Status       int32   `gorm:"column:Status;not null;default:0"`
-	UserID       uint    `gorm:"column:UserID;not null;default:0"`
-	LogIn        int32   `gorm:"column:LogIn;not null;default:0"`
+	GroupID      uint    `gorm:"column:GroupID;not null"`
+	Status       int32   `gorm:"column:Status;not null"`
+	UserID       uint    `gorm:"column:UserID;not null"`
+	LogIn        int32   `gorm:"column:LogIn;not null"`
 }
 
 func (User) TableName() string {

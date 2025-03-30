@@ -1,0 +1,40 @@
+# Binaries (File hasil build)
+*.exe
+*.out
+*.app
+*.dll
+*.so
+*.dylib
+
+# Folder hasil build
+/bin/
+/obj/
+/dist/
+/build/
+
+# Cache dan dependency modules
+/vendor/
+*.mod
+*.sum
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs dan dump files
+*.log
+*.tmp
+*.test
+*.swp
+*.swo
+*.bak
+*.old
+*.pid
+*.seed
+
+/log
+
+# Runtime files
+.env

@@ -21,7 +21,7 @@ func (s *authService) Register(dbName string, registerReq *models.RegisterReques
 	}
 
 	// Encode password sebelum disimpan
-	registerReq.Password = utils.EncodeToBase64Password(registerReq.Password)
+	registerReq.Password, _ = utils.EncodeToBase64Password(registerReq.Password)
 
 	// Generate kode keamanan
 	securityCode, err := utils.GenerateSecurityCode()
@@ -57,7 +57,7 @@ func (s *authService) Login(dbName string, loginReq *models.LoginRequest) (*mode
 		return nil, err
 	}
 
-	encodedPassword := utils.EncodeToBase64Password(loginReq.Password)
+	encodedPassword, _ := utils.EncodeToBase64Password(loginReq.Password)
 
 	user, err := s.userRepo.FindByUsernameAndPassword(dbName, loginReq.UserName, encodedPassword)
 	if err != nil {

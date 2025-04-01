@@ -1,6 +1,7 @@
 package main
 
 import (
+	middleware "echo-api/middlewares"
 	router "echo-api/router"
 	service "echo-api/services"
 
@@ -9,7 +10,9 @@ import (
 
 func main() {
 	log := service.InitLogger()
+
 	e := echo.New()
+	middleware.SetupMiddlewares(e)
 
 	router.SetupRoutes(e, log)
 

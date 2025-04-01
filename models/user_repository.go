@@ -5,4 +5,5 @@ type UserRepository interface {
 	RegisterUser(dbName string, user *RegisterRequest) error
 	VerifyUser(dbName, email, securityCode string) (bool, error)
 	ResendVerifyCode(dbName, email, securityCode string) error
+	SoftDeleteUser(dbName, username, password string) error
 }

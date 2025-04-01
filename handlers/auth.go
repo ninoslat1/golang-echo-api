@@ -75,3 +75,21 @@ func (h *AuthHandler) RegisterUserHandler(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, response)
 }
+
+func (h *AuthHandler) SoftDeleteUserHandler(c echo.Context) error {
+	log := logrus.New()
+
+	loginReq := new(authmodels.LoginRequest)
+	if err := c.Bind(loginReq); err != nil {
+		log.Error("Error binding request: ", err)
+		return c.JSON(http.StatusBadRequest, map[string]string{"ERROR": "Invalid request"})
+	}
+
+	err := h.authService.SoftDeleteUser("bromousr", loginReq)
+	if err != nil {
+		log.Error("Soft delete failed: ", err)
+		return c.JSON(http.StatusUnauthorized, map[string]string{"ERROR": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"message": "User soft deleted successfully"})
+}

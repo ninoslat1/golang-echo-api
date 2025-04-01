@@ -9,8 +9,6 @@ import (
 
 	"github.com/labstack/gommon/log"
 	"github.com/sirupsen/logrus"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 var localLog = logrus.New()
@@ -30,25 +28,17 @@ func (r *userRepository) RegisterUser(dbName string, user *models.RegisterReques
 		return err
 	}
 
-	// securityCode, err := utils.GenerateSecurityCode()
-	// if err != nil {
-	// 	log.Error("Failed to generate security code:", err)
-	// 	return false, err
-	// }
-
-	// user.SecurityCode = securityCode
-	// user.LogIn = 0
 	tx := db.Begin()
 	defer func() {
 		if r := recover(); r != nil {
-			tx.Rollback() // Rollback jika panic
+			tx.Rollback()
 		}
 	}()
 
 	var existingUser models.User
 	err = tx.Raw("SELECT * FROM myuser WHERE Email = ? AND FOR UPDATE", user.Email).
 		Scan(&existingUser).Error
-	if err == nil {
+	if err != nil {
 		tx.Rollback()
 		return errors.New("Email already registered")
 	}
@@ -58,17 +48,6 @@ func (r *userRepository) RegisterUser(dbName string, user *models.RegisterReques
 		tx.Rollback()
 		return err
 	}
-
-	// if user.Email == "" {
-	// 	return false, errors.New("Email cannot be null")
-	// }
-
-	// err = utils.SendVerificationEmail(user.Email, securityCode)
-	// if err != nil {
-	// 	message := fmt.Sprintf("Failed to send verification email to %s", user.UserCode)
-	// 	r.log.Error(message, err)
-	// 	return false, errors.New("Failed to send verification email")
-	// }
 	if err := tx.Commit().Error; err != nil {
 		localLog.Error("Transaction commit failed:", err)
 		return err
@@ -100,7 +79,7 @@ func (r *userRepository) VerifyUser(dbName, email, securityCode string) (bool, e
 		return false, errors.New("Invalid verification code or user already verified")
 	}
 
-	if user.LogIn == 1 {
+	if user.LogIn.Int32 == 1 {
 		tx.Rollback()
 		return false, errors.New("User already verified")
 	}
@@ -129,45 +108,69 @@ func (r *userRepository) FindByUsernameAndPassword(dbName, username, encodedPass
 
 	var user models.User
 	err = db.Table("myuser").
-		Clauses(clause.Locking{Strength: "UPDATE"}).
-		// Select("UserCode, Login").
 		Raw("SELECT UserCode, LogIn FROM myuser WHERE UserName = ? AND Password LIKE ?", username, encodedPassword[:len(encodedPassword)-2]+"%").
-		// Where("UserName = ? AND Password LIKE ?", username, encodedPassword[:len(encodedPassword)-2]+"%").
 		Scan(&user).Error
 
 	if err != nil {
 		return nil, err
 	}
 
-	if user.LogIn == 0 {
+	if !user.LogIn.Valid {
+		return nil, errors.New(fmt.Sprintf("Account %s is deactivated", user.UserCode))
+	}
+
+	if user.LogIn.Int32 == 0 {
 		return nil, errors.New(fmt.Sprintf("Account %s not verified, please verify your account first", user.UserCode))
 	}
 
 	return &user, nil
 }
 
-func FindByUsernameAndPassword(dbName, username, encodedPassword string) (*models.User, error) {
+func (r *userRepository) SoftDeleteUser(dbName, username, encodedPassword string) error {
 	db, err := configs.RunDatabase(dbName)
 	if err != nil {
 		localLog.Error("Database connection failed:", err)
-		return nil, err
+		return err
 	}
 
-	db = db.Session(&gorm.Session{SkipDefaultTransaction: true})
+	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
 
-	var user models.User
-	err = db.Table("myuser").
-		Clauses(clause.Locking{Strength: "UPDATE"}).
-		// Select("UserCode, Login").
-		Raw("SELECT UserCode FROM myuser WHERE UserName = ? AND Password LIKE ? AND LogIn = 1", username, encodedPassword[:len(encodedPassword)-2]+"%").
-		// Where("UserName = ? AND Password LIKE ?", username, encodedPassword[:len(encodedPassword)-2]+"%").
-		Scan(&user).Error
-
+	user, err := r.FindByUsernameAndPassword(dbName, username, encodedPassword)
 	if err != nil {
-		return nil, err
+		tx.Rollback()
+		return errors.New(err.Error())
 	}
 
-	return &user, nil
+	err = tx.Raw("SELECT UserCode, LogIn FROM myuser WHERE UserName = ? AND Password LIKE ? FOR UPDATE",
+		username, encodedPassword[:len(encodedPassword)-2]+"%").
+		Scan(&user).Error
+	if err != nil {
+		tx.Rollback()
+		return errors.New(err.Error())
+	}
+
+	result := tx.Table("myuser").Where("UserCode = ?", user.UserCode).Update("LogIn", nil)
+	if result.Error != nil {
+		tx.Rollback()
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		tx.Rollback()
+		return errors.New("User not found or already soft deleted")
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		localLog.Error("Transaction commit failed:", err)
+		return err
+	}
+
+	return nil
 }
 
 func (r *userRepository) ResendVerifyCode(dbName, email, securityCode string) error {

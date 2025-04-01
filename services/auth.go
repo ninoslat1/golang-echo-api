@@ -87,3 +87,22 @@ func (s *authService) ResendVerifyCode(dbName, email string) error {
 
 	return nil
 }
+
+func (s *authService) SoftDeleteUser(dbName string, loginReq *models.LoginRequest) error {
+	if err := utils.LoginRequestValidator(loginReq); err != nil {
+		return err
+	}
+
+	encodedPassword, err := utils.EncodeToBase64Password(loginReq.Password)
+
+	if err != nil {
+		return err
+	}
+
+	err = s.userRepo.SoftDeleteUser(dbName, loginReq.UserName, encodedPassword)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

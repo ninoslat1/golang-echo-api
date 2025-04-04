@@ -2,10 +2,11 @@
 package models
 
 type AuthService interface {
-	Login(dbName string, loginReq *LoginRequest) (*LoginResponse, error)
+	Login(dbName string, loginReq *LoginRequest) (*User, error)
 	Register(dbName string, registerReq *RegisterRequest) (*RegisterResponse, error)
 	VerifyUser(dbName, email, securityCode string) (bool, error)
 	SoftDeleteUser(dbName string, loginReq *LoginRequest) error
+	HardDeleteUser(dbName string, loginReq *LoginRequest) error
 }
 
 type LoginRequest struct {

@@ -36,7 +36,7 @@ func InitLogger() *logrus.Logger {
 
 	log.SetOutput(multiWriter)
 
-	log.SetLevel(logrus.InfoLevel)
+	log.SetLevel(logrus.DebugLevel)
 
 	log.Info("Logger initialized successfully")
 

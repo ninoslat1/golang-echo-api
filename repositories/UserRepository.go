@@ -183,7 +183,7 @@ func (r *userRepository) ResendVerifyCode(dbName, email, securityCode string) er
 	tx := db.Begin()
 	defer func() {
 		if r := recover(); r != nil {
-			tx.Rollback() // Rollback jika panic
+			tx.Rollback()
 		}
 	}()
 
@@ -212,9 +212,52 @@ func (r *userRepository) ResendVerifyCode(dbName, email, securityCode string) er
 		return err
 	}
 
-	// if err := utils.SendVerificationEmail(email, securityCode); err != nil {
-	// 	return false, errors.New("Failed to send verification email")
-	// }
+	return nil
+}
+
+func (r *userRepository) HardDeleteUser(dbName, username, encodedPassword string) error {
+	db, err := configs.RunDatabase(dbName)
+	if err != nil {
+		localLog.Error("Database connection failed:", err)
+		return err
+	}
+
+	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	user, err := r.FindByUsernameAndPassword(dbName, username, encodedPassword)
+	if err != nil {
+		tx.Rollback()
+		return errors.New(err.Error())
+	}
+
+	err = tx.Raw("SELECT UserCode, LogIn FROM myuser WHERE UserName = ? AND Password LIKE ? FOR UPDATE",
+		username, encodedPassword[:len(encodedPassword)-2]+"%").
+		Scan(&user).Error
+	if err != nil {
+		tx.Rollback()
+		return errors.New(err.Error())
+	}
+
+	result := tx.Table("myuser").Where("UserCode = ?", user.UserCode).Delete(&user)
+	if result.Error != nil {
+		tx.Rollback()
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		tx.Rollback()
+		return errors.New("User not found or already soft deleted")
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		localLog.Error("Transaction commit failed:", err)
+		return err
+	}
 
 	return nil
 }

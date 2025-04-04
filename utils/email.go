@@ -5,17 +5,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/joho/godotenv"
 	"github.com/labstack/gommon/log"
 	"gopkg.in/gomail.v2"
 )
 
 func SendVerificationEmail(toEmail, securityCode string) error {
-	err := godotenv.Load()
-	if err != nil {
-		log.Warn("Error loading .env file, using default environment variables")
-	}
-
 	cfg := &models.EmailConfig{
 		Password: os.Getenv("SMTP_PASSWORD"),
 		Email:    os.Getenv("HOST_EMAIL"),

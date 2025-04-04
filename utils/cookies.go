@@ -1,47 +1,47 @@
 package utils
 
 import (
-	"crypto/rand"
-	"encoding/base64"
+	models "echo-api/models"
 	"errors"
 	"net/http"
+	"os"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
-	"golang.org/x/crypto/argon2"
+	"github.com/labstack/gommon/log"
 )
 
-func genSecureCookies() (string, string) {
-	tokenBytes := make([]byte, 32)
-	_, err := rand.Read(tokenBytes)
-	if err != nil {
-		return "", err.Error()
+func genSecureCookies(userName string) (string, error) {
+	cfg := &models.JwtConfig{
+		Secret: os.Getenv("SECRET_KEY"),
 	}
 
-	salt := make([]byte, 16)
-	_, err = rand.Read(salt)
-	if err != nil {
-		return "", err.Error()
+	// fmt.Println("genSecureCookies - SECRET_KEY:", cfg.Secret)
+
+	claims := jwt.MapClaims{
+		"user_name": userName,
+		"exp":       time.Now().Add(4 * 7 * 24 * time.Hour).Unix(),
 	}
 
-	deriveKeys := argon2.IDKey(
-		tokenBytes,
-		salt,
-		3,
-		64*1024,
-		4,
-		32,
-	)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signedToken, err := token.SignedString([]byte(cfg.Secret))
+	if err != nil {
+		return "", err
+	}
 
-	return base64.URLEncoding.EncodeToString(deriveKeys), ""
+	return signedToken, nil
+
 }
 
-func SetSecureCookies(c echo.Context) (*http.Cookie, error) {
-	token, err := genSecureCookies()
-	if err != "" {
-		return nil, errors.New(err)
+func SetSecureCookies(c echo.Context, loginReq *models.LoginRequest) (*http.Cookie, error) {
+	token, err := genSecureCookies(loginReq.UserName)
+	if err != nil {
+		log.Errorf("Failed to generate token for user %s: %v", loginReq.UserName, err)
+		return nil, err
 	}
 
+	// Create and set the cookie
 	cookie := &http.Cookie{
 		Name:     "session_token",
 		Value:    token,
@@ -52,9 +52,37 @@ func SetSecureCookies(c echo.Context) (*http.Cookie, error) {
 		SameSite: http.SameSiteStrictMode,
 	}
 
-	// Set the cookie
 	c.SetCookie(cookie)
-
-	// Return the underlying http.Cookie
 	return cookie, nil
+}
+
+func ValidateSessionToken(cookie *http.Cookie) (string, error) {
+	cfg := &models.JwtConfig{
+		Secret: os.Getenv("SECRET_KEY"),
+	}
+
+	// fmt.Println("SECRET_KEY:", cfg.Secret)
+
+	// Parse the token
+	token, err := jwt.Parse(cookie.Value, func(token *jwt.Token) (interface{}, error) {
+		return []byte(cfg.Secret), nil
+	})
+
+	if err != nil || !token.Valid {
+		return "", errors.New("invalid session token")
+	}
+
+	// Extract claims
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", errors.New("invalid token claims")
+	}
+
+	// Extract user_code
+	userCode, ok := claims["user_name"].(string)
+	if !ok {
+		return "", errors.New("user code missing in token")
+	}
+
+	return userCode, nil
 }

@@ -52,7 +52,7 @@ func (s *authService) VerifyUser(dbName, email, securityCode string) (bool, erro
 	return s.userRepo.VerifyUser(dbName, email, securityCode)
 }
 
-func (s *authService) Login(dbName string, loginReq *models.LoginRequest) (*models.LoginResponse, error) {
+func (s *authService) Login(dbName string, loginReq *models.LoginRequest) (*models.User, error) {
 	if err := utils.LoginRequestValidator(loginReq); err != nil {
 		return nil, err
 	}
@@ -64,7 +64,7 @@ func (s *authService) Login(dbName string, loginReq *models.LoginRequest) (*mode
 		return nil, err
 	}
 
-	return &models.LoginResponse{Message: "Welcome " + user.UserCode}, nil
+	return user, nil
 }
 
 func (s *authService) ResendVerifyCode(dbName, email string) error {
@@ -100,6 +100,25 @@ func (s *authService) SoftDeleteUser(dbName string, loginReq *models.LoginReques
 	}
 
 	err = s.userRepo.SoftDeleteUser(dbName, loginReq.UserName, encodedPassword)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *authService) HardDeleteUser(dbName string, loginReq *models.LoginRequest) error {
+	if err := utils.LoginRequestValidator(loginReq); err != nil {
+		return err
+	}
+
+	encodedPassword, err := utils.EncodeToBase64Password(loginReq.Password)
+
+	if err != nil {
+		return err
+	}
+
+	err = s.userRepo.HardDeleteUser(dbName, loginReq.UserName, encodedPassword)
 	if err != nil {
 		return err
 	}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -14,11 +13,6 @@ import (
 
 func RunDatabase(dbName string) (*gorm.DB, error) {
 	var localLog = logrus.New()
-	err := godotenv.Load()
-	if err != nil {
-		localLog.Warn("Error loading .env file, using default environment variables")
-	}
-
 	cfg := &models.DBConfig{
 		Host:     os.Getenv("DB_HOST"),
 		User:     os.Getenv("DB_USER"),

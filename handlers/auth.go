@@ -6,41 +6,46 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/gommon/log"
 	"github.com/sirupsen/logrus"
 )
 
 type AuthHandler struct {
 	authService authmodels.AuthService
+	log         *logrus.Logger
 }
 
-func NewAuthHandler(authService authmodels.AuthService) *AuthHandler {
-	return &AuthHandler{authService}
+func NewAuthHandler(authService authmodels.AuthService, log *logrus.Logger) *AuthHandler {
+	return &AuthHandler{authService, log}
 }
 
 func (h *AuthHandler) LoginHandler(c echo.Context) error {
-	log := logrus.New()
-
 	loginReq := new(authmodels.LoginRequest)
 	if err := c.Bind(loginReq); err != nil {
 		log.Error("Error binding request: ", err)
 		return c.JSON(http.StatusBadRequest, map[string]string{"ERROR": "Invalid request"})
 	}
 
-	loginResponse, err := h.authService.Login("bromousr", loginReq)
+	user, err := h.authService.Login("bromousr", loginReq)
 	if err != nil {
 		log.Info("Login failed: ", err)
 		return c.JSON(http.StatusUnauthorized, map[string]string{"ERROR": err.Error()})
 	}
 
-	cookie, err := utils.SetSecureCookies(c)
+	cookie, err := utils.SetSecureCookies(c, loginReq)
 	if err != nil {
-		log.Error("Failed to create session cookie for user:", loginResponse.Message)
+		log.Error("Failed to create session cookie for user:", user.UserName)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"ERROR": "Failed to generate session"})
 	}
 
-	loginResponse.Cookie = cookie.Value
+	user.UserName = cookie.Value
 
-	return c.JSON(http.StatusOK, loginResponse)
+	response := authmodels.LoginResponse{
+		Message: "Welcome " + loginReq.UserName,
+		Cookie:  cookie.Value,
+	}
+
+	return c.JSON(http.StatusOK, response)
 }
 
 func (h *AuthHandler) VerifyEmailHandler(c echo.Context) error {
@@ -77,8 +82,6 @@ func (h *AuthHandler) RegisterUserHandler(c echo.Context) error {
 }
 
 func (h *AuthHandler) SoftDeleteUserHandler(c echo.Context) error {
-	log := logrus.New()
-
 	loginReq := new(authmodels.LoginRequest)
 	if err := c.Bind(loginReq); err != nil {
 		log.Error("Error binding request: ", err)
@@ -92,4 +95,31 @@ func (h *AuthHandler) SoftDeleteUserHandler(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "User soft deleted successfully"})
+}
+
+func (h *AuthHandler) HardDeleteUserHandler(c echo.Context) error {
+	userName, ok := c.Get("user_name").(string)
+	if !ok || userName == "" {
+		log.Error("Unauthorized access: Missing user_name from context")
+		return c.JSON(http.StatusUnauthorized, map[string]string{"ERROR": "Unauthorized"})
+	}
+
+	loginReq := new(authmodels.LoginRequest)
+	if err := c.Bind(loginReq); err != nil {
+		log.Error("Error binding request: ", err)
+		return c.JSON(http.StatusBadRequest, map[string]string{"ERROR": "Invalid request"})
+	}
+
+	if userName != loginReq.UserName {
+		log.Error("Unauthorized attempt to delete another user's account")
+		return c.JSON(http.StatusForbidden, map[string]string{"ERROR": "You can only delete your own account"})
+	}
+
+	err := h.authService.HardDeleteUser("bromousr", loginReq)
+	if err != nil {
+		log.Error("Soft delete failed: ", err)
+		return c.JSON(http.StatusUnauthorized, map[string]string{"ERROR": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"message": "User permanent delete successfully"})
 }

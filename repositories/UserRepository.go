@@ -115,10 +115,6 @@ func (r *userRepository) FindByUsernameAndPassword(dbName, username, encodedPass
 		return nil, err
 	}
 
-	if !user.LogIn.Valid {
-		return nil, errors.New(fmt.Sprintf("Account %s is deactivated", user.UserCode))
-	}
-
 	if user.LogIn.Int32 == 0 {
 		return nil, errors.New(fmt.Sprintf("Account %s not verified, please verify your account first", user.UserCode))
 	}

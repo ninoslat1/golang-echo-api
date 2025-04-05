@@ -19,6 +19,6 @@ func SetupRoutes(e *echo.Echo, log *logrus.Logger) {
 	e.POST("/login", authHandler.LoginHandler)
 	e.POST("/register", authHandler.RegisterUserHandler)
 	e.POST("/verify", authHandler.VerifyEmailHandler)
-	e.POST("/deactivate", authHandler.SoftDeleteUserHandler)
+	e.POST("/deactivate", authHandler.SoftDeleteUserHandler, middlewares.CookieAuthMiddleware)
 	e.POST("/delete", authHandler.HardDeleteUserHandler, middlewares.CookieAuthMiddleware)
 }

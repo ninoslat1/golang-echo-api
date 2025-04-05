@@ -12,7 +12,7 @@ import (
 	"github.com/labstack/gommon/log"
 )
 
-func genSecureCookies(userName string) (string, error) {
+func genSecureCookies(user *models.User) (string, error) {
 	cfg := &models.JwtConfig{
 		Secret: os.Getenv("SECRET_KEY"),
 	}
@@ -20,7 +20,8 @@ func genSecureCookies(userName string) (string, error) {
 	// fmt.Println("genSecureCookies - SECRET_KEY:", cfg.Secret)
 
 	claims := jwt.MapClaims{
-		"user_name": userName,
+		"user_name": user.UserName,
+		"login":     user.LogIn.Int32,
 		"exp":       time.Now().Add(4 * 7 * 24 * time.Hour).Unix(),
 	}
 
@@ -34,10 +35,10 @@ func genSecureCookies(userName string) (string, error) {
 
 }
 
-func SetSecureCookies(c echo.Context, loginReq *models.LoginRequest) (*http.Cookie, error) {
-	token, err := genSecureCookies(loginReq.UserName)
+func SetSecureCookies(c echo.Context, user *models.User) (*http.Cookie, error) {
+	token, err := genSecureCookies(user)
 	if err != nil {
-		log.Errorf("Failed to generate token for user %s: %v", loginReq.UserName, err)
+		log.Errorf("Failed to generate token for user %s: %v", user.UserName, err)
 		return nil, err
 	}
 
@@ -69,19 +70,27 @@ func ValidateSessionToken(cookie *http.Cookie) (string, error) {
 	})
 
 	if err != nil || !token.Valid {
-		return "", errors.New("invalid session token")
+		return "", errors.New("Invalid session token")
 	}
 
 	// Extract claims
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return "", errors.New("invalid token claims")
+		return "", errors.New("Invalid token claims")
 	}
 
-	// Extract user_code
 	userCode, ok := claims["user_name"].(string)
 	if !ok {
-		return "", errors.New("user code missing in token")
+		return "", errors.New("User code is missing in token")
+	}
+
+	login, ok := claims["login"].(int32)
+	if !ok {
+		return "", errors.New("Login status is missing in token")
+	}
+
+	if login == 0 {
+		return "", errors.New("Account is deactivated, reactivate it first")
 	}
 
 	return userCode, nil

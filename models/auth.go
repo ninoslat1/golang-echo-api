@@ -36,3 +36,8 @@ type RegisterRequest struct {
 type RegisterResponse struct {
 	Message string `json:"message"`
 }
+
+type VerifyUserInput struct {
+	Email        string
+	SecurityCode string
+}

@@ -45,7 +45,12 @@ func (s *authService) Register(dbName string, registerReq *models.RegisterReques
 }
 
 func (s *authService) VerifyUser(dbName, email, securityCode string) (bool, error) {
-	if err := utils.VerifyUserValidator(email, securityCode); err != nil {
+	input := &models.VerifyUserInput{
+		Email:        email,
+		SecurityCode: securityCode,
+	}
+
+	if err := utils.VerifyUserValidator(input); err != nil {
 		return false, err
 	}
 

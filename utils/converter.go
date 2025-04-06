@@ -22,7 +22,7 @@ func DecodePasswordFromBase64(text string) (string, error) {
 
 	decode, err := base64.StdEncoding.DecodeString(text)
 	if err != nil {
-		return "", err
+		return "", errors.New("Encoded text not valid")
 	}
 
 	return strings.ReplaceAll(string(decode), "\u0000", ""), nil

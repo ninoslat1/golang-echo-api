@@ -36,5 +36,7 @@
 
 /log
 
+views/*_templ.go
+*.work
 # Runtime files
 .env

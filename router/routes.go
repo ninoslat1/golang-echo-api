@@ -16,7 +16,7 @@ func SetupRoutes(e *echo.Echo, log *logrus.Logger) {
 
 	authHandler := authhandler.NewAuthHandler(authService, log)
 
-	e.GET("/", authhandler.HomeHandler)
+	e.GET("/", authhandler.LoginHandler)
 	e.POST("/login", authHandler.LoginHandler)
 	e.POST("/register", authHandler.RegisterUserHandler)
 	e.POST("/verify", authHandler.VerifyEmailHandler)

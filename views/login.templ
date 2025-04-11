@@ -1,0 +1,41 @@
+package views
+
+import (
+    "echo-api/models"
+)
+
+templ LoginPage() {
+    @Layout("Login", loginFormContent())
+}
+
+templ loginFormContent() {
+    @LoginForm(models.LoginResponse{})
+}
+
+templ LoginForm(response models.LoginResponse) {
+    <div class="max-w-md mx-auto mt-10 p-6 bg-white rounded shadow">
+        <h1 class="text-xl font-bold mb-4">Login</h1>
+        <form hx-post="/login" hx-target="#login-result" class="space-y-4">
+            <input type="text" name="username" placeholder="Username"
+                class="w-full px-4 py-2 border rounded" />
+            <input type="password" name="password" placeholder="Password"
+                class="w-full px-4 py-2 border rounded" />
+            <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+                Login
+            </button>
+        </form>
+        <div id="login-result" class="mt-4 text-sm">
+            @LoginResult(response)
+        </div>
+    </div>
+}
+
+templ LoginResult(response models.LoginResponse) {
+    <div>
+        if response.Cookie != "" {
+            <p class="text-green-600">Login successful! Token: {response.Cookie}</p>
+        } else {
+            <p class="text-red-600">{response.Message}</p>
+        }
+    </div>
+}

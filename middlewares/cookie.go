@@ -23,3 +23,19 @@ func CookieAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		return next(c)
 	}
 }
+
+func CookiePageMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		cookie, err := c.Cookie("session_token")
+		if err != nil {
+			return c.Redirect(http.StatusSeeOther, "/")
+		}
+
+		_, err = utils.ValidateSessionToken(cookie)
+		if err != nil {
+			return c.Redirect(http.StatusSeeOther, "/")
+		}
+
+		return next(c)
+	}
+}

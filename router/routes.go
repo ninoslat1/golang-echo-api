@@ -1,24 +1,26 @@
 package router
 
 import (
-	authhandler "echo-api/handlers"
+	"echo-api/handlers"
 	"echo-api/middlewares"
-	repository "echo-api/repositories"
-	service "echo-api/services"
+	"echo-api/repositories"
+	"echo-api/services"
 
 	"github.com/labstack/echo/v4"
 	"github.com/sirupsen/logrus"
 )
 
 func SetupRoutes(e *echo.Echo, log *logrus.Logger) {
-	userRepo := repository.NewUserRepository(log)
-	authService := service.NewAuthService(userRepo)
+	userRepo := repositories.NewUserRepository(log)
+	authService := services.NewAuthService(userRepo)
 
-	authHandler := authhandler.NewAuthHandler(authService, log)
+	authHandler := handlers.NewAuthHandler(authService, log)
 
-	e.GET("/", authhandler.LoginHandler)
+	e.GET("/", handlers.LoginPageHandler)
+	e.GET("/home", handlers.HomePageHandler)
+
 	e.POST("/login", authHandler.LoginHandler)
-	e.POST("/register", authHandler.RegisterUserHandler)
+	e.POST("/register", authHandler.RegisterUserHandler, middlewares.CookiePageMiddleware)
 	e.POST("/verify", authHandler.VerifyEmailHandler)
 	e.POST("/deactivate", authHandler.SoftDeleteUserHandler, middlewares.CookieAuthMiddleware)
 	e.POST("/delete", authHandler.HardDeleteUserHandler, middlewares.CookieAuthMiddleware)

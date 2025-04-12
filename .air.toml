@@ -1,0 +1,12 @@
+[build]
+    bin = "tmp/index.exe"
+    cmd = "templ generate && go build -o tmp/index.exe index.go"
+    include_ext = ["go", "templ"]
+    exclude_dir = ["tmp", "node_modules", "views_gen"]
+    exclude_file = ["*_test.go"]
+
+[log]
+  time = true
+
+[color]
+  main = "yellow"

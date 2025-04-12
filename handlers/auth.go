@@ -3,6 +3,7 @@ package handlers
 import (
 	authmodels "echo-api/models"
 	"echo-api/utils"
+	"echo-api/views"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -29,23 +30,29 @@ func (h *AuthHandler) LoginHandler(c echo.Context) error {
 	user, err := h.authService.Login("bromousr", loginReq)
 	if err != nil {
 		log.Info("Login failed: ", err)
-		return c.JSON(http.StatusUnauthorized, map[string]string{"ERROR": err.Error()})
+		// return c.JSON(http.StatusUnauthorized, map[string]string{"ERROR": err.Error()})
+		return views.LoginResult(authmodels.LoginResponse{
+			Message: err.Error(),
+		}).Render(c.Request().Context(), c.Response().Writer)
 	}
 
 	cookie, err := utils.SetSecureCookies(c, user)
 	if err != nil {
 		log.Error("Failed to create session cookie for user:", user.UserName)
-		return c.JSON(http.StatusInternalServerError, map[string]string{"ERROR": "Failed to generate session"})
+		return views.LoginResult(authmodels.LoginResponse{
+			Message: err.Error(),
+		}).Render(c.Request().Context(), c.Response().Writer)
 	}
 
 	user.UserName = cookie.Value
 
-	response := authmodels.LoginResponse{
-		Message: "Welcome " + loginReq.UserName,
-		Cookie:  cookie.Value,
-	}
+	// response := authmodels.LoginResponse{
+	// 	Message: "Welcome " + loginReq.UserName,
+	// 	Cookie:  cookie.Value,
+	// }
 
-	return c.JSON(http.StatusOK, response)
+	c.Response().Header().Set("HX-Redirect", "/home")
+	return c.NoContent(http.StatusOK)
 }
 
 func (h *AuthHandler) VerifyEmailHandler(c echo.Context) error {

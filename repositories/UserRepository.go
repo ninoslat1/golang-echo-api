@@ -9,16 +9,16 @@ import (
 
 	"github.com/labstack/gommon/log"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 var localLog = logrus.New()
 
 type userRepository struct {
-	log *logrus.Logger
 }
 
-func NewUserRepository(log *logrus.Logger) models.UserRepository {
-	return &userRepository{log}
+func NewUserRepository() models.UserRepository {
+	return &userRepository{}
 }
 
 func (r *userRepository) RegisterUser(dbName string, user *models.RegisterRequest) error {
@@ -108,18 +108,28 @@ func (r *userRepository) FindByUsernameAndPassword(dbName, username, encodedPass
 
 	var user models.User
 	err = db.Table("myuser").
-		Raw("SELECT UserCode, LogIn FROM myuser WHERE UserName = ? AND Password LIKE ?", username, encodedPassword[:len(encodedPassword)-2]+"%").
-		Scan(&user).Error
+		Select("UserCode, LogIn").
+		Where("UserName = ? AND Password LIKE ?", username, encodedPassword[:len(encodedPassword)-2]+"%").
+		First(&user).Error
 
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("Account not found, please check your username and password")
+		}
 		return nil, err
 	}
 
+	if user.LogIn.Value == nil {
+		return nil, errors.New("Account not found, please check your username and password")
+	}
+
 	if user.LogIn.Int32 == 0 {
-		return nil, errors.New(fmt.Sprintf("Account %s not verified, please verify your account first", user.UserCode))
+		var msg = fmt.Sprintf("User %s not verified or registered", username)
+		return nil, errors.New(msg)
 	}
 
 	return &user, nil
+
 }
 
 func (r *userRepository) SoftDeleteUser(dbName, username, encodedPassword string) error {

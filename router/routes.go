@@ -11,7 +11,7 @@ import (
 )
 
 func SetupRoutes(e *echo.Echo, log *logrus.Logger) {
-	userRepo := repositories.NewUserRepository(log)
+	userRepo := repositories.NewUserRepository()
 	authService := services.NewAuthService(userRepo)
 
 	authHandler := handlers.NewAuthHandler(authService, log)

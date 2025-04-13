@@ -17,9 +17,9 @@ templ LoginForm(response models.LoginResponse) {
         <h1 class="text-xl font-bold mb-4">Login</h1>
         <form hx-post="/login" hx-target="#login-result" class="space-y-4">
             <input type="text" name="username" placeholder="Username"
-                class="w-full px-4 py-2 border rounded" />
+                class="w-full px-4 py-2 border rounded" autocomplete="off"/>
             <input type="password" name="password" placeholder="Password"
-                class="w-full px-4 py-2 border rounded" />
+                class="w-full px-4 py-2 border rounded" autocomplete="off"/>
             <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
                 Login
             </button>
@@ -32,10 +32,21 @@ templ LoginForm(response models.LoginResponse) {
 
 templ LoginResult(response models.LoginResponse) {
     <div>
-        if response.Cookie != "" {
-            <p class="text-green-600">Login successful! Token: {response.Cookie}</p>
-        } else {
-            <p class="text-red-600">{response.Message}</p>
+        if response.Cookie == "" {
+            <div 
+                x-data="{ open: true }" 
+                x-show="open"
+                x-transition
+                class="p-4 bg-red-100 border border-red-300 text-red-800 rounded relative"
+            >
+                <span>{response.Message}</span>
+                <button 
+                    @click="open = false"
+                    class="absolute top-1 right-2 text-red-600 hover:text-red-800"
+                >
+                    &times;
+                </button>
+            </div>
         }
     </div>
 }

@@ -7,10 +7,25 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func RunValidatorTest[T any](t *testing.T, cases []models.ValidatorTestCase[T], validatorFunc func(T) error) {
+func RunValidatorTest[T any](t *testing.T, cases []models.ValidatorTestCase[T], validatorFunc any) {
 	for _, tc := range cases {
 		t.Run(tc.Name, func(t *testing.T) {
-			err := validatorFunc(tc.Input)
+			var result string
+			var err error
+
+			switch vf := validatorFunc.(type) {
+			case func(T) error:
+				err = vf(tc.Input)
+			case func(T) (string, error):
+				result, err = vf(tc.Input)
+				if tc.ExpectErr == nil {
+					assert.NotEmpty(t, result)
+				} else {
+					assert.Empty(t, result)
+				}
+			default:
+				t.Fatalf("Unsupported validator function signature")
+			}
 
 			if tc.ExpectErr == nil {
 				assert.NoError(t, err)

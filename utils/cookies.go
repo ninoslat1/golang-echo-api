@@ -13,11 +13,13 @@ import (
 )
 
 func genSecureCookies(user *models.User) (string, error) {
+	if user == nil {
+		return "", errors.New("User is not exist")
+	}
+
 	cfg := &models.JwtConfig{
 		Secret: os.Getenv("SECRET_KEY"),
 	}
-
-	// fmt.Println("genSecureCookies - SECRET_KEY:", cfg.Secret)
 
 	claims := jwt.MapClaims{
 		"user_name": user.UserName,
